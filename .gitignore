@@ -1,0 +1,22 @@
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.ipynb_checkpoints/
+
+# Environments
+env/
+venv/
+.venv/
+
+# PyTorch
+*.pth.tar
+
+# Logs and outputs
+logs/
+runs/
+*.log
+
+# OS artifacts
+.DS_Store
+Thumbs.db
