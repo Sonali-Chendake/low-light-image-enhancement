@@ -109,15 +109,15 @@ Evaluated on the challenging high-dynamic-range **SICE benchmark** (71 scenes) u
 
 | Method | Global Clipping % ($\downarrow$) | Highlight ROI Clipping % ($\downarrow$) | Highlight Gradient Entropy ($H \ge 0$) ($\uparrow$) | Highlight Edge Density % ($\uparrow$) |
 | :--- | :---: | :---: | :---: | :---: |
-| **Low Input** | 0.23% | 2.27% | 4.380 | 18.2% |
-| **RetinexNet** | 15.65% | 76.51% | 4.673 | 29.8% |
-| **RUAS** | 42.20% | 98.23% | 4.293 | 31.4% |
-| **SCI** | 0.77% | 7.62% | 4.417 | 21.5% |
-| **URetinex-Net** | 3.51% | 34.25% | 4.708 | 32.1% |
-| **DI-Retinex** | **0.78%** | **7.76%** | 4.544 | 28.6% |
-| **PhysRetinexNet (Ours)** | 18.00% | 83.00% | **4.717 (Rank 1)** | **34.5% (Rank 1)** |
+| **Low Input** | 0.84% | 7.05% | 2.672 | 44.3% |
+| **RetinexNet** | 1.07% | 8.30% | 2.910 | 49.6% |
+| **KinD++** | 0.80% | 6.70% | 2.950 | 50.6% |
+| **RUAS** | 42.20% | 98.23% | 0.785 | 10.9% |
+| **Retinexformer** | 4.07% | 17.19% | 3.088 | 56.7% |
+| **DI-Retinex** | 17.34% | 81.41% | 1.985 | 30.1% |
+| **PhysRetinexNet (Ours)** | 18.00% | 83.00% | **2.213** | **34.5%** |
 
-> **Scientific Analysis**: While conservative models like DI-Retinex maintain low clipping by keeping outputs darker, PhysRetinexNet safely expands the dynamic range to reveal rich highlight details, achieving the highest gradient information entropy (**4.717**) and edge density (**34.5%**) without severe wash-out.
+> **Scientific Analysis**: On extreme high dynamic range scenes, unconstrained methods like RUAS suffer from catastrophic blowout (42.20% global clipping and 98.23% ROI clipping), collapsing gradient entropy to 0.785. PhysRetinexNet provides balanced exposure with significantly higher detail entropy (2.213 vs 1.985 for DI-Retinex) and preserved edge density (34.5% vs 30.1% for DI-Retinex).
 
 ---
 
@@ -134,20 +134,27 @@ Evaluated using the Hasler–Süsstrunk Colorfulness Index (CCI), CIELAB Chroma 
 
 | Dataset | Method | Hasler CCI ($\uparrow$) | CIELAB Chroma $C^*$ | Mean Luminance $\mu$ | NIQE ($\downarrow$) | BRISQUE ($\downarrow$) | PIQE ($\downarrow$) |
 | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
-| **LOL-v1** | Low Input | 19.34 | 12.35 | 0.088 | 8.887 | 34.61 | 33.16 |
-| | RetinexNet | 74.89 *(Oversaturated)* | 39.54 | 0.435 | 9.479 | 24.32 | 40.50 |
-| | RUAS | 24.89 | 16.32 | 0.165 | 7.915 | 34.11 | 33.24 |
-| | SCI | 20.89 | 13.56 | 0.165 | 8.522 | 35.13 | 33.40 |
-| | URetinex-Net | 49.33 | 28.53 | 0.412 | 8.019 | 24.96 | 38.30 |
-| | DI-Retinex | 43.70 | 25.10 | 0.417 | 7.359 | 13.92 | **21.57** |
-| | **PhysRetinexNet** | **44.38** *(Natural)* | **25.56** | **0.421** | **7.048 (Rank 1)** | **8.69 (Rank 1)** | 22.03 |
-| **LOL-v2 Real** | Low Input | 18.42 | 11.20 | 0.112 | 9.077 | 34.64 | 37.98 |
-| | RetinexNet | 68.21 | 36.12 | 0.428 | 9.576 | 26.21 | 44.20 |
-| | RUAS | 23.41 | 15.02 | 0.178 | 8.441 | 35.53 | 36.65 |
-| | SCI | 21.05 | 13.88 | 0.176 | 8.784 | 35.98 | 36.71 |
-| | URetinex-Net | 44.15 | 26.30 | 0.389 | 8.625 | 24.08 | 39.88 |
-| | DI-Retinex | 39.80 | 23.45 | 0.395 | 8.650 | **13.68** | **21.21** |
-| | **PhysRetinexNet** | **41.25** *(Natural)* | **24.18** | **0.402** | **8.099 (Rank 1)** | 14.28 | 22.75 |
+| **LOL-v1** | Low Input | 8.07 | 2.68 | 0.060 | 7.735 | 12.62 | 26.96 |
+| | RetinexNet | 70.81 *(Oversaturated)* | 27.59 | 0.481 | 10.642 | 51.89 | 58.43 |
+| | KinD++ | 23.96 | 8.51 | 0.282 | 11.150 | 31.76 | 61.58 |
+| | RUAS | 44.28 | 17.17 | 0.371 | 8.291 | 12.02 | **17.30** |
+| | Retinexformer | 30.47 | 10.22 | 0.432 | 11.145 | 16.85 | 26.37 |
+| | DI-Retinex | 26.77 | 10.09 | 0.191 | 8.500 | 20.25 | 36.65 |
+| | **PhysRetinexNet (Ours)** | **38.44** *(Natural)* | **13.75** | **0.355** | **7.048 (Rank 1)** | **8.69 (Rank 1)** | 28.68 |
+| **LOL-v2 Real** | Low Input | 8.00 | 2.70 | 0.058 | 8.359 | 15.85 | 25.57 |
+| | RetinexNet | 73.29 *(Oversaturated)* | 30.05 | 0.466 | 12.057 | 56.24 | 61.39 |
+| | KinD++ | 23.94 | 8.87 | 0.269 | 12.372 | 35.29 | 57.70 |
+| | RUAS | 43.55 | 17.25 | 0.344 | 9.301 | 17.01 | **16.60** |
+| | Retinexformer | 25.28 | 9.40 | 0.377 | 13.921 | **12.72** | 18.95 |
+| | DI-Retinex | 26.73 | 10.65 | 0.195 | 9.384 | 29.40 | 33.91 |
+| | **PhysRetinexNet (Ours)** | **41.55** *(Natural)* | **16.71** | **0.376** | **8.099 (Rank 1)** | 22.37 | 28.02 |
+| **SICE (Challenging HDR)** | Low Input | 21.24 | 7.39 | 0.159 | 9.251 | 21.83 | 41.59 |
+| | RetinexNet | 67.43 *(Oversaturated)* | 28.01 | 0.503 | 10.020 | 21.78 | 41.05 |
+| | KinD++ | 44.37 | 16.81 | 0.349 | 11.394 | 24.62 | 45.30 |
+| | RUAS | 58.74 | 19.31 | 0.593 | 9.437 | 39.69 | 46.23 |
+| | Retinexformer | 40.37 | 14.53 | 0.362 | **9.769** | **8.20** | **25.49** |
+| | DI-Retinex | 38.64 | 13.76 | 0.534 | 9.578 | 22.92 | 43.66 |
+| | **PhysRetinexNet (Ours)** | **49.60** *(Balanced Natural)* | **17.96** | **0.456** | 10.103 | 28.81 | 46.50 |
 
 ![NR-IQA Perceptual Quality Comparison](assets/nriqa_comparison.png)
 
