@@ -72,16 +72,82 @@ All evaluations adhere to a **strict No-Reference (NR) protocol**: no ground-tru
 ### Objective 1: Noise Amplification Reduction in Deep Shadows
 
 #### Problem Statement
-In low-light scenes, camera sensors exhibit low signal-to-noise ratio (SNR). Standard Retinex formulations invert the illumination field ($R \approx I / L$), which acts as a high-pass amplifier that aggressively boosts sensor noise into visible color artifacts.
+In low-light capture environments, camera sensors operate with an exceptionally low signal-to-noise ratio (SNR). Under the classical Retinex image formation model:
 
-#### Proposed Solution
-PhysRetinexNet introduces an **Illumination-Conditioned Reflectance Estimator** that explicitly decouples raw reflectance into a clean component and a noise residual bounded by dynamic headroom $\delta_{max} = 0.05$:
-$$I_l \approx (R_{clean} + \Delta R) \cdot L_l, \quad \text{where } \Delta R = \delta_{max} \cdot \tanh(\mathcal{H}_{\theta}(R_{raw}, L_l))$$
+$$
+\mathbf{I}_{\text{low}}(x) = \mathbf{R}(x) \odot \mathbf{L}_{\text{low}}(x) + \mathbf{N}(x), \quad x \in \Omega
+$$
+
+where $\mathbf{I}_{\text{low}} \in \mathbb{R}^{3 \times H \times W}$ denotes the observed image, $\mathbf{R} \in [0, 1]^{3 \times H \times W}$ is the latent reflectance, $\mathbf{L}_{\text{low}} \in (0, 1]^{1 \times H \times W}$ is the spatial illumination map, $\odot$ represents the Hadamard element-wise product, and $\mathbf{N} \sim \mathcal{N}(\mathbf{0}, \sigma_N^2 \mathbf{I})$ denotes additive sensor noise.
+
+Standard Retinex formulations estimate raw reflectance by direct illumination inversion:
+
+$$
+\mathbf{R}_{\text{raw}}(x) = \frac{\mathbf{I}_{\text{low}}(x)}{\mathbf{L}_{\text{low}}(x) + \epsilon} = \mathbf{R}(x) + \frac{\mathbf{N}(x)}{\mathbf{L}_{\text{low}}(x) + \epsilon}
+$$
+
+Because $\mathbf{L}_{\text{low}}(x) \to 0$ in deep shadow regions, the inversion acts as an unbounded high-pass amplifier that scales the noise variance by $(\mathbf{L}_{\text{low}}(x) + \epsilon)^{-2} \gg 1$, generating prominent noise patterns and color artifacts.
+
+#### Proposed Mathematical Formulation
+PhysRetinexNet explicitly decouples the raw inverted reflectance into a clean physical reflectance component $\mathbf{R}_{\text{clean}}$ and an illumination-conditioned noise residual field $\mathbf{\Delta R}$:
+
+$$
+\mathbf{R}_{\text{raw}}(x) = \mathbf{R}_{\text{clean}}(x) + \mathbf{\Delta R}(x)
+$$
+
+To strictly preserve genuine high-frequency textures and prevent over-smoothing, the residual estimation network $\mathcal{H}_{\theta}$ is bounded by an explicit dynamic headroom parameter $\delta_{\max} = 0.05$:
+
+$$
+\mathbf{\Delta R}(x) = \delta_{\max} \cdot \tanh\Big( \mathcal{H}_{\theta}\big( [\mathbf{R}_{\text{raw}}(x), \mathbf{L}_{\text{low}}(x)] \big) \Big)
+$$
+
+The clean reflectance is recovered via projection:
+
+$$
+\mathbf{R}_{\text{clean}}(x) = \text{clamp}\big( \mathbf{R}_{\text{raw}}(x) - \mathbf{\Delta R}(x), \, 0.0, \, 1.0 \big)
+$$
+
+Finally, the enhanced image is synthesized by physical recombination with the enhanced illumination field $\mathbf{L}_{\text{high}}$:
+
+$$
+\mathbf{I}_{\text{enh}}(x) = \text{clamp}\big( \mathbf{R}_{\text{clean}}(x) \odot \mathbf{L}_{\text{high}}(x), \, 0.0, \, 1.0 \big)
+$$
 
 ![Decomposition Heatmaps](assets/decomposition_heatmaps.png)
 
-#### Quantitative Results
-Evaluated via Median Absolute Deviation (MAD) of the Laplacian response inside input-anchored flat shadow regions ($\text{Low Gray} < 0.20$, $\nabla \text{Low} \le P_{30}$) and Shadow Noise-to-Signal Ratio ($\text{NSR} = \sigma / \mu_{shadow}$):
+#### Mathematical Definitions of Audited Noise Metrics
+To strictly avoid confounding true physical edges with sensor noise, metrics are evaluated on an input-anchored homogeneous shadow domain:
+
+1. **Input-Anchored Flat Shadow Domain ($\Omega_{\text{flat}}$)**:
+
+$$
+\Omega_{\text{shadow}} = \big\{ x \in \Omega \mid Y_{\text{low}}(x) < 0.20 \big\}
+$$
+
+$$
+\Omega_{\text{flat}} = \big\{ x \in \Omega_{\text{shadow}} \mid \|\nabla Y_{\text{low}}(x)\|_2 \le P_{30}\big(\|\nabla Y_{\text{low}}\|_{\Omega_{\text{shadow}}}\big) \big\}
+$$
+
+2. **Robust Shadow Noise Standard Deviation ($\hat{\sigma}_{\text{shadow}}$)**:  
+Estimated using the Median Absolute Deviation (MAD) of the discrete Laplacian operator $\mathbf{\Delta}_{\text{Lap}} = Y_{\text{enh}} * \mathbf{K}_{\text{Lap}}$:
+
+$$
+\hat{\sigma}_{\text{shadow}} = \frac{\text{median}_{x \in \Omega_{\text{flat}}} \Big| \mathbf{\Delta}_{\text{Lap}}(x) - \text{median}_{x' \in \Omega_{\text{flat}}}(\mathbf{\Delta}_{\text{Lap}}(x')) \Big|}{0.6745 \cdot \sqrt{\sum_{i,j} \mathbf{K}_{\text{Lap}}^2(i,j)}} = \frac{\text{MAD}\big(\mathbf{\Delta}_{\text{Lap}}|_{\Omega_{\text{flat}}}\big)}{0.6745 \times 6}
+$$
+
+where $\mathbf{K}_{\text{Lap}} = \begin{bmatrix} 1 & -2 & 1 \\ -2 & 4 & -2 \\ 1 & -2 & 1 \end{bmatrix}$ (with Frobenius norm $\|\mathbf{K}_{\text{Lap}}\|_F = \sqrt{36} = 6$).
+
+3. **Shadow Noise-to-Signal Ratio ($\text{NSR}_{\text{shadow}}$)**:
+
+$$
+\text{NSR}_{\text{shadow}} = \frac{\hat{\sigma}_{\text{shadow}}}{\mu_{\text{shadow}} + 10^{-6}}, \quad \text{where } \mu_{\text{shadow}} = \frac{1}{|\Omega_{\text{flat}}|} \sum_{x \in \Omega_{\text{flat}}} Y_{\text{enh}}(x)
+$$
+
+4. **Global Immerkaer Noise Estimator ($\hat{\sigma}_{\text{global}}$)**:
+
+$$
+\hat{\sigma}_{\text{global}} = \frac{\sqrt{\pi / 2}}{6(W - 2)(H - 2)} \sum_{x \in \Omega_{\text{inner}}} \big| (Y_{\text{enh}} * \mathbf{K}_{\text{Lap}})(x) \big|
+$$
 
 | Dataset | Metric | Low Input | RetinexNet | RUAS | SCI | URetinex-Net | DI-Retinex | **PhysRetinexNet (Ours)** | Relative Gain vs DI-Retinex |
 | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
@@ -101,11 +167,41 @@ Evaluated via Median Absolute Deviation (MAD) of the Laplacian response inside i
 #### Problem Statement
 In scenes containing mixed lighting (e.g., streetlamps, illuminated windows, high dynamic range), uniform gain pushes bright pixels into saturation (values clipped at $\ge 250$), destroying structural textures and edges.
 
-#### Proposed Solution
-A **MaxRGB-anchored illumination estimation** couples with an adaptive, spatially-bounded illumination adjustment curve that dynamically restricts illumination gain in regions with high initial brightness.
+#### Proposed Mathematical Formulation & Evaluated Metrics
+1. **MaxRGB Illumination Prior**:
+
+$$
+\mathbf{L}_{\text{anchor}}(x) = \max_{c \in \{R, G, B\}} \mathbf{I}_{\text{low}}^c(x)
+$$
+
+2. **Adaptive Dynamic Range Illumination Transformation**:
+
+$$
+\mathbf{L}_{\text{high}}(x) = \mathcal{G}_{\phi}\big(\mathbf{L}_{\text{low}}(x)\big)
+$$
+
+3. **Input-Anchored Highlight Region of Interest ($\Omega_{\text{high}}$)**:
+
+$$
+\Omega_{\text{high}} = \big\{ x \in \Omega \mid Y_{\text{low}}(x) \ge P_{90}(Y_{\text{low}}) \big\}
+$$
+
+4. **Highlight Clipping Ratio ($C_{\text{ROI}}$)**:
+
+$$
+C_{\text{ROI}} = \frac{1}{|\Omega_{\text{high}}|} \sum_{x \in \Omega_{\text{high}}} \mathbb{I}\Big( \max_{c \in \{R,G,B\}} \mathbf{I}_{\text{enh}}^c(x) \ge 250 \Big) \times 100\%
+$$
+
+5. **Highlight Gradient Discrete Shannon Entropy ($H_{\text{high}}$)**:
+
+$$
+p_k = \frac{n_k}{\sum_{j=1}^{B} n_j}, \quad H_{\text{high}} = -\sum_{k=1}^{B} p_k \log_2(p_k)
+$$
+
+where $n_k$ denotes the histogram count of normalized gradient magnitudes $\|\nabla Y_{\text{enh}}\|$ inside $\Omega_{\text{high}}$ across $B=32$ discrete bins.
 
 #### Quantitative Results
-Evaluated on the challenging high-dynamic-range **SICE benchmark** (71 scenes) using Global Clipping %, Input-Anchored Highlight ROI Clipping % (top 10% brightest pixels in input), Discrete Shannon Gradient Entropy ($H \ge 0$), and Edge Density %:
+Evaluated on the challenging high-dynamic-range **SICE benchmark** (71 scenes) using Global Clipping %, Input-Anchored Highlight ROI Clipping %, Discrete Shannon Gradient Entropy ($H_{\text{high}} \ge 0$), and Edge Density %:
 
 | Method | Global Clipping % ($\downarrow$) | Highlight ROI Clipping % ($\downarrow$) | Highlight Gradient Entropy ($H \ge 0$) ($\uparrow$) | Highlight Edge Density % ($\uparrow$) |
 | :--- | :---: | :---: | :---: | :---: |
@@ -126,8 +222,31 @@ Evaluated on the challenging high-dynamic-range **SICE benchmark** (71 scenes) u
 #### Problem Statement
 Applying non-physical transformations across RGB channels causes unnatural color shifts, chalky washouts, or aggressive oversaturation (e.g. RetinexNet's intense chroma inflation).
 
-#### Proposed Solution
-PhysRetinexNet enforces physics-grounded color consistency by estimating a shared single-channel spatial illumination field $L \in \mathbb{R}^{1 \times H \times W}$ across color channels and supervising color distribution using angular cosine color losses.
+#### Proposed Mathematical Formulation & Evaluated Metrics
+1. **Shared Spatial Illumination Constraint**:
+To avoid artificial chromatic shifts, illumination is modeled as a shared single-channel field across all three color channels:
+
+$$
+\mathbf{L}_{\text{low}} \in (0, 1]^{1 \times H \times W}, \quad \mathbf{I}_{\text{enh}}^c(x) = \mathbf{R}_{\text{clean}}^c(x) \cdot \mathbf{L}_{\text{high}}(x), \quad \forall c \in \{R, G, B\}
+$$
+
+2. **Hasler–Süsstrunk Colorfulness Metric ($\text{CCI}$)**:
+Quantifies perceived chromatic intensity and prevents extreme chromatic blooming:
+
+$$
+\text{rg} = R - G, \quad \text{yb} = \frac{1}{2}(R + G) - B
+$$
+
+$$
+\text{CCI} = \sqrt{\sigma_{\text{rg}}^2 + \sigma_{\text{yb}}^2} + 0.3 \sqrt{\mu_{\text{rg}}^2 + \mu_{\text{yb}}^2}
+$$
+
+3. **CIELAB Chroma ($C^*_{ab}$)**:
+Evaluates color saturation in the perceptually uniform CIELAB color space:
+
+$$
+C^*_{ab}(x) = \sqrt{\big(a^*(x)\big)^2 + \big(b^*(x)\big)^2}, \quad \bar{C}^*_{ab} = \frac{1}{|\Omega|} \sum_{x \in \Omega} C^*_{ab}(x)
+$$
 
 #### Quantitative Results
 Evaluated using the Hasler–Süsstrunk Colorfulness Index (CCI), CIELAB Chroma ($C^*_{ab}$), Mean Luminance ($\mu$), and No-Reference Perceptual Quality (NIQE, BRISQUE, PIQE):
